@@ -1,89 +1,99 @@
 /**
  * Created by andrewhurst on 10/5/15.
  */
-var React = require('react');
-var ReactNative = require('react-native');
+ import React, { Component, PropTypes } from 'react';
+ import {
+   Keyboard,
+   LayoutAnimation,
+   View,
+   Platform,
+   StyleSheet
+ } from 'react-native';
 
-var {
-    DeviceEventEmitter,
-    LayoutAnimation,
-    View,
-    Platform
-} = ReactNative;
+ const styles = StyleSheet.create({
+   container: {
+     left: 0,
+     right: 0,
+     bottom: 0,
+   },
+ });
 
-// From: https://medium.com/man-moon/writing-modern-react-native-ui-e317ff956f02
-const defaultAnimation = {
-    duration: 500,
-    create: {
-        duration: 300,
-        type: LayoutAnimation.Types.easeInEaseOut,
-        property: LayoutAnimation.Properties.opacity
-    },
-    update: {
-        type: LayoutAnimation.Types.spring,
-        springDamping: 200
-    }
-};
+ export default class KeyboardSpacer extends Component {
+   static propTypes = {
+     topSpacing: PropTypes.number,
+     onToggle: PropTypes.func,
+     style: View.propTypes.style,
+     animationConfig: PropTypes.object,
+   };
 
-class KeyboardSpacer extends React.Component {
-    constructor(props, context) {
-        super(props, context);
-        this.state = {
-            keyboardSpace: 0,
-            isKeyboardOpened: false
-        };
+   static defaultProps = {
+     topSpacing: 0,
+     // From: https://medium.com/man-moon/writing-modern-react-native-ui-e317ff956f02
+     animationConfig: {
+       duration: 500,
+       create: {
+         duration: 300,
+         type: LayoutAnimation.Types.easeInEaseOut,
+         property: LayoutAnimation.Properties.opacity
+       },
+       update: {
+         type: LayoutAnimation.Types.spring,
+         springDamping: 200
+       }
+     },
+     onToggle: () => null,
+   };
 
-        this.updateKeyboardSpace = this.updateKeyboardSpace.bind(this);
-        this.resetKeyboardSpace = this.resetKeyboardSpace.bind(this);
-    }
+   constructor(props, context) {
+     super(props, context);
+     this.state = {
+       keyboardSpace: 0,
+       isKeyboardOpened: false
+     };
+     this._listeners = null;
+     this.updateKeyboardSpace = this.updateKeyboardSpace.bind(this);
+     this.resetKeyboardSpace = this.resetKeyboardSpace.bind(this);
+   }
 
-    componentWillUpdate(props, state) {
-        if (state.isKeyboardOpened !== this.state.isKeyboardOpened) {
-            LayoutAnimation.configureNext(props.animationConfig || defaultAnimation);
-        }
-    }
+   componentDidMount() {
+     const updateListener = Platform.OS === 'android' ? 'keyboardDidShow' : 'keyboardWillShow';
+     const resetListener = Platform.OS === 'android' ? 'keyboardDidHide' : 'keyboardWillHide';
+     this._listeners = [
+       Keyboard.addListener(updateListener, this.updateKeyboardSpace),
+       Keyboard.addListener(resetListener, this.resetKeyboardSpace)
+     ];
+   }
 
-    updateKeyboardSpace(frames) {
-        if (!frames.endCoordinates)
-            return;
+   componentWillUpdate(props, state) {
+     if (state.isKeyboardOpened !== this.state.isKeyboardOpened) {
+       LayoutAnimation.configureNext(props.animationConfig);
+     }
+   }
 
-        var keyboardSpace = frames.endCoordinates.height + ('topSpacing' in this.props ? this.props.topSpacing : 0);
-        this.setState({
-            keyboardSpace: keyboardSpace,
-            isKeyboardOpened: true
-        }, () => ('onToggle' in this.props ? this.props.onToggle(true, keyboardSpace) : null));
-    }
+   componentWillUnmount() {
+     this._listeners.forEach(listener => listener.remove());
+   }
 
-    resetKeyboardSpace() {
-        this.setState({
-            keyboardSpace: 0,
-            isKeyboardOpened: false
-        }, () => ('onToggle' in this.props ? this.props.onToggle(false, 0) : null));
-    }
+   updateKeyboardSpace(frames) {
+     if (!frames.endCoordinates) {
+       return;
+     }
+     const keyboardSpace = frames.endCoordinates.height + this.props.topSpacing;
+     this.setState({
+       keyboardSpace,
+       isKeyboardOpened: true
+     }, this.props.onToggle(true, keyboardSpace));
+   }
 
-    componentDidMount() {
-        if (Platform.OS == "android") {
-            this._listeners = [
-                DeviceEventEmitter.addListener('keyboardDidShow', this.updateKeyboardSpace),
-                DeviceEventEmitter.addListener('keyboardDidHide', this.resetKeyboardSpace)
-            ];
-        } else {
-            this._listeners = [
-                DeviceEventEmitter.addListener('keyboardWillShow', this.updateKeyboardSpace),
-                DeviceEventEmitter.addListener('keyboardWillHide', this.resetKeyboardSpace)
-            ];
-        }
-    }
+   resetKeyboardSpace() {
+     this.setState({
+       keyboardSpace: 0,
+       isKeyboardOpened: false
+     }, this.props.onToggle(false, 0));
+   }
 
-    componentWillUnmount() {
-        this._listeners.forEach(function(/** EmitterSubscription */listener) {
-            listener.remove();
-        });
-    }
-
-    render() {
-        return (<View style={[{height: this.state.keyboardSpace, left: 0, right: 0, bottom: 0}, this.props.style]}/>);
-    }
-}
-
-module.exports = KeyboardSpacer;
+   render() {
+     return (
+       <View style={[styles.container, { height: this.state.keyboardSpace }, this.props.style]} />);
+   }
+ }
